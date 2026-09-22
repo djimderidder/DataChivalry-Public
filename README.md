@@ -25,9 +25,6 @@ Each module contains its own dedicated README with additional documentation and 
 - `Imaging`  
   Image analysis and segmentation of fibril structures from electron microscopy (EM) images.
 
-- `ODE_Hsp70_recruitment`  
-  Kinetic simulations of substrate, JDP, and HSP70 recruitment and interaction networks.
-
 - `ThT_decay`  
   Processing and analysis of high-throughput Thioflavin T fluorescence measurements from FLUOstar plate readers.
 
