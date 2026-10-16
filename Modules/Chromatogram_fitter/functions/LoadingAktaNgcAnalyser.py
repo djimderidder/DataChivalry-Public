@@ -1,5 +1,4 @@
 import numpy as np
-import math
 import pandas as pd
 import os
 
@@ -9,17 +8,66 @@ class Parameter:
         self.unit = unit
 
     def __float__(self):
-        return self.value
-    
+        # float() so integer values read from Excel (numpy int64) also work
+        return float(self.value)
+
 def loadConfig(Name):
-    config = pd.read_excel(Name,sheet_name = 'configFiles')
-    dfPara = pd.read_excel(Name,sheet_name = 'configParameters')
-    
+    config = pd.read_excel(Name, sheet_name='configFiles')
+    dfPara = pd.read_excel(Name, sheet_name='configParameters')
+
     para = {row['name']: Parameter(row['value'], row['units']) for _, row in dfPara.iterrows()}
-    
-    config  = (config.loc[config['RunBool']==1]).reset_index(drop=True) #only continue with files for which the RunBook equals 1
-        
+
+    config = (config.loc[config['RunBool'] == 1]).reset_index(drop=True)  # only continue with files for which RunBool equals 1
+
     return config, para
+
+
+def saveConfig(Config, FitPara, ChiSquares, Name, Ask=True):
+    """Write each run's fitted parameters and reduced chi-square back into
+    the 'configFiles' sheet of the config spreadsheet, matched on 'Filename'.
+
+    Config     : the config the fit was run on (one row per run, same order
+                 as FitPara).
+    FitPara    : fitted parameters per run, e.g. the first output of fitData.
+    ChiSquares : (chi2, reduced chi2) per run, e.g. the third output of fitData.
+    Name       : path to the config spreadsheet. Excel must be closed.
+    Ask        : if True, ask for confirmation on the console before writing.
+
+    Only the 'configFiles' and 'configParameters' sheets are written back;
+    any other sheets or cell formatting in the workbook are lost.
+
+    Returns a copy of Config with 'FitPara' and 'Reduced Chi-square' added.
+    """
+    out = Config.copy()
+    out['FitPara'] = [str([float(f'{v:.6g}') for v in p]) for p in FitPara]
+    out['Reduced Chi-square'] = [c[1] for c in ChiSquares]
+
+    if Ask:
+        answer = input(f"Save the fit results to '{os.path.basename(Name)}'? "
+                       "Excel must be closed (y/n): ").strip().lower()
+        if answer not in ('y', 'yes'):
+            return out
+
+    sheetFiles = pd.read_excel(Name, sheet_name='configFiles')
+    sheetPara = pd.read_excel(Name, sheet_name='configParameters')
+    newCols = ['FitPara', 'Reduced Chi-square']
+    for col in newCols:
+        if col not in sheetFiles.columns:
+            sheetFiles[col] = None
+        sheetFiles[col] = sheetFiles[col].astype(object)
+    colOrder = list(sheetFiles.columns)
+
+    updates = out.drop_duplicates('Filename', keep='last').set_index('Filename')[newCols]
+    sheetFiles = sheetFiles.set_index('Filename')
+    sheetFiles.update(updates)
+    sheetFiles = sheetFiles.reset_index()[colOrder]
+
+    with pd.ExcelWriter(Name, engine='openpyxl') as writer:
+        sheetFiles.to_excel(writer, sheet_name='configFiles', index=False)
+        sheetPara.to_excel(writer, sheet_name='configParameters', index=False)
+    print(f"Fit results saved to '{os.path.basename(Name)}'.")
+    return out
+
 
 def loadAktaNgc(Config, Dir):
     data_list = []  # Store all dataframes
@@ -31,7 +79,7 @@ def loadAktaNgc(Config, Dir):
     max_elutants = Config["Max Elutant [mM]"].values
 
     for i in range(len(filenames)):
-        file_path = os.path.join(Dir,folder[i], filenames[i])
+        file_path = os.path.join(Dir, folder[i], filenames[i])
         name = filenames[i][:8] + '_' + str(i)
         system = systems[i]
         max_elutant = max_elutants[i]
@@ -49,8 +97,11 @@ def loadAktaNgc(Config, Dir):
                     continue
 
             if data is None:
-                print(f"Error: Unable to read file '{filenames[i]}' with ';' or ','")
-                continue
+                raise ValueError(
+                    f"loadAktaNgc: unable to read '{file_path}' with ';' or ',' as separator. "
+                    "Check the file exists and is an unmodified instrument export, or set "
+                    "RunBool to 0 for this row in the config."
+                )
 
             try:
                 # Column extraction
@@ -84,13 +135,19 @@ def loadAktaNgc(Config, Dir):
                 data_list.append(datai)
 
             except Exception as e:
-                print(f"Error parsing file '{filenames[i]}': {e}")
-                continue
+                raise RuntimeError(
+                    f"loadAktaNgc: error parsing '{file_path}' (System '{system}'): {e}"
+                ) from e
 
         else:  # Assume NGC data
             try:
                 df = pd.read_csv(file_path, header=1, sep=",")
-                volume_col = df['UV1 (215 nm)_column_volume']
+                # NGC records one shared volume axis per run; take it from the
+                # same channel as the UV signal, falling back to UV1 if needed.
+                volName = 'UV2 (280 nm)_column_volume'
+                if volName not in df.columns:
+                    volName = 'UV1 (215 nm)_column_volume'
+                volume_col = df[volName]
                 uv_col = df['UV2 (280 nm)_mAU']
                 cond_col = df['Conductivity_mS/cm']
                 percent_b = df['%B_column_volume']
@@ -103,7 +160,7 @@ def loadAktaNgc(Config, Dir):
                 datai = pd.DataFrame({
                     'Volume [mL]': volume_col,
                     'UV [mAU]': uv_col,
-                    'Conductivity': cond_col,
+                    'Cond [mS/cm]': cond_col,  # same column name as the AKTA branch
                     'B [%B]': b_interp,
                     'Name': name
                 })
@@ -114,45 +171,45 @@ def loadAktaNgc(Config, Dir):
                 data_list.append(datai)
 
             except Exception as e:
-                print(f"Error parsing NGC file '{filenames[i]}': {e}")
-                continue
+                raise RuntimeError(
+                    f"loadAktaNgc: error parsing NGC file '{file_path}' (System '{system}' "
+                    f"is treated as NGC): {e}"
+                ) from e
 
     return data_list
 
 
 def loadBlank(Config, Dir):
-    blankConfig = []
-    
-    #HANDLE ALSO IF BLANKFILENAME IS EMPTY
+    blankRows = []
     for u in Config['BlankFilename'].unique():
-        if pd.isna(u)==False:
-            first_row = Config.loc[Config['BlankFilename'] == u].iloc[0]
+        if pd.notna(u):
+            first_row = Config.loc[Config['BlankFilename'] == u].iloc[0].copy()
             first_row['Filename'] = first_row['BlankFilename']
             first_row['Filefolder'] = first_row['BlankFoldername']
-            blankConfig.append(first_row)
-        
+            blankRows.append(first_row)
 
-    blankConfig = pd.DataFrame(blankConfig).reset_index(drop=True)
+    if not blankRows:
+        print('No blank runs assigned in the config - continuing without blanks.')
+        return [], Config, pd.DataFrame(columns=Config.columns)
+
+    blankConfig = pd.DataFrame(blankRows).reset_index(drop=True)
     blank = loadAktaNgc(blankConfig, Dir)
-    
+
     # Create a mapping from 'Filename' to the index in 'blankConfig'
     filename_to_index = blankConfig.reset_index().set_index('Filename')['index']
 
     # Map the filenames to indices, preserving NaNs
     Config['BlankFilename'] = Config['BlankFilename'].map(filename_to_index)
-
-    # Optionally convert non-null values to integers
     Config['BlankFilename'] = Config['BlankFilename'].apply(
         lambda x: int(x) if pd.notna(x) else x
     )
-    
-    config = Config
-    
+
     # blankConfig is returned too: it carries the 'System' (and other config)
     # for each blank run, which the processing steps need in order to apply
     # exactly the same corrections (dead volume, etc.) to the blank as to the
     # sample data.
-    return blank, config, blankConfig
+    return blank, Config, blankConfig
+
 
 def checkBlankGradientProfile(Data, Blank, Config, ToleranceB=2.0):
     """Sanity-check that each run's raw %B gradient matches its assigned blank's.
@@ -217,7 +274,6 @@ def checkBlankGradientProfile(Data, Blank, Config, ToleranceB=2.0):
     return mismatches
 
 
-def loadFractions(Filename,Folder):
-    out = pd.read_excel(os.path.join(Folder,Filename),header=1)
+def loadFractions(Filename, Folder):
+    out = pd.read_excel(os.path.join(Folder, Filename), header=1)
     return out
-
