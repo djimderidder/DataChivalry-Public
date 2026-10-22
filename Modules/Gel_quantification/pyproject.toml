@@ -1,0 +1,15 @@
+[project]
+name = "gelanalyzer"
+version = "0.0.1"
+description = "Automatic analysis of gel electrophoresis images"
+requires-python = ">=3.10"
+dependencies = ["numpy", "scipy", "scikit-image", "tifffile", "matplotlib"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+addopts = "-v"
+markers = ["real_data: needs real gel files in tests/data/real/ (skipped if absent)"]
