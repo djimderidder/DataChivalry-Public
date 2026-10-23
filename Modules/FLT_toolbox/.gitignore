@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.venv/
+
+# measured data and results never go into git
+data/
+output/
+tests/data/real/
+*.dat

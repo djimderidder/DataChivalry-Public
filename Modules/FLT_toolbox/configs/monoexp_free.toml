@@ -1,0 +1,7 @@
+# Single exponential with a loose lifetime: a quick first look at a new dye.
+n_exp = 1
+
+[[taus]]
+value = 3.0
+min = 0.05
+max = 20.0

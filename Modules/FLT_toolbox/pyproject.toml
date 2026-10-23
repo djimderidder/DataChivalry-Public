@@ -1,0 +1,15 @@
+[project]
+name = "fluotime"
+version = "0.1.0"
+description = "Global lifetime reconvolution fits and steady-state anisotropy for FluoTime data"
+requires-python = ">=3.11"
+dependencies = ["numpy", "scipy", "pandas", "matplotlib", "lmfit"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+addopts = "-v"
+markers = ["real_data: needs measured .dat files in tests/data/real/ (skipped if absent)"]

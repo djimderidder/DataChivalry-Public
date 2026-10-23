@@ -17,7 +17,7 @@ Each module contains its own dedicated README with additional documentation and 
   Simulate EPR spectra from spin systems. *(Code currently only available upon request.)*
 
 - `FLT_toolbox`  
-  Fluorescence lifetime fitting tool for FluoTime data.
+  Global fluorescence lifetime fitting and steady-state anisotropy for FluoTime data. *(Archived.)*
 
 - `Gel_quantification`  
   Quantification of band intensities from Western blots and gel electrophoresis images.

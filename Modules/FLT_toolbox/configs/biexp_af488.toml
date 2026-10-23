@@ -1,0 +1,44 @@
+# Two-component fit as used in the original AF488 scripts.
+# tau1 is held near the free-dye lifetime (~4.1 ns); tau2 is the quenched/bound component.
+# Every field is optional except n_exp and taus; defaults are listed in FitConfig.
+
+n_exp = 2
+
+# --- options (see README "Fit options") ---------------------------------------
+irf_source = "reference"           # "reference" (IRF of datasets[reference_index]) | "own"
+reference_index = 0
+shift_mode = "global"              # "global" | "per_dataset" | "anchored"
+anchor_window = 0.05               # ns, only used for shift_mode = "anchored"
+irf_preprocessing = "mean_threshold"   # "mean_threshold" | "percentile_subtract" | "none"
+irf_percentile = 5.0               # only used for "percentile_subtract"
+weighting = "neyman"               # "neyman" | "pearson" | "none"
+method = "leastsq"                 # any lmfit method name
+
+# start amplitude_i = factor_i * total_counts / (n_exp * tau_i)
+amplitude_guess_factors = [1.0, 1.0]
+
+# --- constraints ------------------------------------------------------------------
+[[taus]]          # tau1
+value = 4.1
+min = 3.7
+max = 4.2
+
+[[taus]]          # tau2
+value = 2.8
+min = 0.05
+max = 3.8
+
+[shift]           # ns; for "per_dataset" these bounds apply to every dataset's shift
+value = 0.0
+min = -1.0
+max = 1.0
+
+[background]      # counts per bin, per dataset
+value = 2.5
+min = 0.0
+max = 100.0
+
+[scatter]         # total counts of the IRF-shaped scatter term, per dataset
+value = 3000.0
+min = 0.0
+max = 1e5

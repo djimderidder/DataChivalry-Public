@@ -1,0 +1,24 @@
+# Three components with the free-dye lifetime fixed (vary = false) and
+# per-dataset IRF shifts, each using its own IRF.
+n_exp = 3
+irf_source = "own"
+shift_mode = "per_dataset"
+
+[[taus]]
+value = 4.1
+vary = false
+
+[[taus]]
+value = 2.0
+min = 0.5
+max = 3.8
+
+[[taus]]
+value = 0.3
+min = 0.02
+max = 1.0
+
+[shift]
+value = 0.0
+min = -0.5
+max = 0.5
