@@ -1,0 +1,17 @@
+[project]
+name = "thtdecay"
+version = "0.1.0"
+description = "ThT disaggregation kinetics (initial rate, endpoint) from FLUOstar plate-reader data"
+requires-python = ">=3.10"
+dependencies = ["numpy", "scipy", "pandas", "matplotlib", "openpyxl", "palettable"]
+
+[project.optional-dependencies]
+notebook = ["ipywidgets", "ipympl"]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# ../../Shared/src: the shared fluostar package (loading, windows, config, selection)
+pythonpath = ["src", "tests", "../../Shared/src"]
+addopts = "-v"
+markers = ["real_data: needs real FLUOstar exports + config in tests/data/real/ (skipped if absent)"]

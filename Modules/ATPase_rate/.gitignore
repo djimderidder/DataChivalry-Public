@@ -1,0 +1,7 @@
+__pycache__/
+.pytest_cache/
+
+# outputs and real data never go into git
+output/
+tests/data/real/
+*.csv

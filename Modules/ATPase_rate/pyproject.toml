@@ -1,0 +1,17 @@
+[project]
+name = "atpase"
+version = "0.1.0"
+description = "ATPase rates from NADH-coupled FLUOstar absorbance assays"
+requires-python = ">=3.10"
+dependencies = ["numpy", "scipy", "pandas", "matplotlib", "openpyxl", "palettable"]
+
+[project.optional-dependencies]
+interactive = ["PyQt5"]  # draggable window picker outside Spyder
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# ../../Shared/src: the shared fluostar package (loading, windows, config, selection)
+pythonpath = ["src", "tests", "../../Shared/src"]
+addopts = "-v"
+markers = ["real_data: needs a real FLUOstar export + config in tests/data/real/ (skipped if absent)"]

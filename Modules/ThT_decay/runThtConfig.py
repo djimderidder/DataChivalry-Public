@@ -1,105 +1,99 @@
 # -*- coding: utf-8 -*-
 """
-Load a FLUOstar ThT disaggregation dataset by reading folder and filename from a config file.
-This code batch-process a set of this data. And gets initial rate and final tht signal.
+Batch-process ThT disaggregation runs listed in a config spreadsheet: for every row
+the initial rate and the final ThT signal.
 
-Config spreadsheet is expected to have (at least) the columns:
-    folder, filename, Well, Control F, Control T
- 
+The config has (at least) the columns  folder, filename, Well, Control F, Control T
+(Control F = fibrils without ATP, Control T = no fibrils), plus free description
+columns (exp, date, X = fibrils, M = monomers, A, B, C, ... = other components).
+See input/ThT config template.xlsx.
+
+Fill in the USER SETTINGS below and run this file (Spyder: "Run file", F5).
+Leave raw_data_root = None to run on a simulated experiment first. Afterwards
+`config`, `results` and `summary` are in the Variable Explorer.
+
+From a terminal the same settings are used; flags override them, e.g.
+    python runThtConfig.py --root D:/fluostar --config input/my_config.xlsx --rows 0,1,2 --save output
 @author: ridderdde
 """
-import sys, os
+import sys
 from pathlib import Path
 
-cwdPath = Path.cwd().parent
+HERE = Path(__file__).resolve().parent
+for folder in (HERE / "src", HERE.parents[1] / "Shared" / "src"):
+    if str(folder) not in sys.path:
+        sys.path.insert(0, str(folder))
 
-for functionDir in [
-    cwdPath / ".." / "Shared",
-    cwdPath / "ThT_decay" / "functions"
-]:
-    sys.path.append(str(functionDir.resolve()))
+import argparse
+import tempfile
 
-import numpy as np
-import pandas as pd
-
-from loadData import FLUOstarData
-from processData import Process_well
-from visualizeData import PlotThTDiagnostics
+from fluostar.config import read_config
+from fluostar.save import save_and_show
+from thtdecay import ThtSettings, analyse_config
+from thtdecay.plotting import plot_diagnostics
 
 # ---------- USER SETTINGS ----------
-raw_data_root = r"D:\phd_leiden\experiments\fluostar" #path were all raw data is stored
+raw_data_root = None #HERE / "data" or None for simulated experiment
+config_file = HERE / "data" / "my config.xlsx"   # was: HERE / "input" / "ThT config template.xlsx"
 
-inputPath = cwdPath / "ThT_decay" / "input"
-outputPath = cwdPath / "ThT_decay" / "output"
-fileName = "Checked disag assay space.xlsx"
 
-gain = 3 #often multiple gain are used to measure tht signal pick if you want the first second or third...
-equilibration_time_s = 600 #cut off first 10 minutes
-max_time_s = 14*3600 #cut of data after 14 hours
-window_size = 51 # Savitzky-Golay smoothing window (must be odd)
-poly_order = 3             
-initial_window_s = 60 * 60 # initial-rate fit window
-final_window_s = 60 * 60 # endpoint averaging window
- 
-rows_to_run = None # None = all rows, or e.g. range(0, 10) for a subset
-diagnotic_rows = [] # row indices to also show the 3-panel diagnostic plot for
-save_results = False # set True to write the summary csv to output folder
+settings = ThtSettings(
+    gain=3,                 # multiple gains are measured: pick one
+    equilibration_s=600,    # cut off the first 10 minutes (noisy)
+    max_time_s=14 * 3600,   # cut off after 14 hours (None = keep everything)
+    initial_window_s=3600,  # initial rate: linear fit over t <= 1 h (absolute time)
+    final_window_s=3600,    # endpoint: mean over the last hour
+    smoothing_window=51,    # Savitzky-Golay window (odd number of points)
+    smoothing_poly=3,
+    smooth_initial=False,
+    smooth_final=False,
+)
 
+rows_to_run = None          # None = all rows, or e.g. [0, 1, 4]
+diagnostic_rows = []        # rows to also show the 3-panel diagnostic plot for
+show_figures = True
+save_results = False        # also write the summary (CSV) and figures (PNG) to output/
 # -------------------------------------------------
- 
-if not raw_data_root:
-    raise ValueError(
-        "Set the raw_data_root environment variable to the folder containing your raw FLUOstar exports."
-    )
-
-config = pd.read_excel(inputPath / fileName) #config = pd.read_excel(os.path.join(inputPath,fileName))
-rows = range(len(config)) if rows_to_run is None else rows_to_run
- 
-results = []
-for k in rows:
-    row = config.iloc[k]
-    roi = pd.DataFrame({
-        'well': [row['Well']],
-        'nFibril': [row['Control F']],
-        'nBase': [row['Control T']],
-    })
- 
-    raw = FLUOstarData(os.path.join(raw_data_root, row['folder']), row['filename'])
-    raw.set_gain(Gain=gain)
-    raw.data = raw.data[raw.data['Time [s]'] > equilibration_time_s]
- 
-    norm, kinetics = Process_well(
-        raw, roi,
-        Max_time_s=max_time_s,
-        Initial_window_s=initial_window_s,
-        Final_window_s=final_window_s,
-        Window_size=window_size,
-        Poly_order=poly_order,
-        Mode='off'
-    )
- 
-    results.append({
-        'row': k,
-        'well': row['Well'],
-        'rate_percent_per_hour': kinetics['initial']['rate_percent_per_hour'],
-        'endpoint_percent': kinetics['final']['endpoint_percent'],
-        'drift': kinetics['final']['drift'],
-    })
- 
-    if k in diagnotic_rows:
-        dataNorm = norm[row['Well']].values.astype(float)
-        time_s = norm['Time [s]'].values.astype(float)
-        PlotThTDiagnostics(time_s, dataNorm, kinetics, title=f"Run {k} ({row['Well']})")
- 
-results = pd.DataFrame(results)
-print(results)
- 
-if save_results:
-    outputPath.mkdir(exist_ok=True)
-    out_file =outputPath / "tht_summary.csv"
-    results.to_csv(out_file, index=False)
-    print(f"Saved summary to {out_file}")
- 
 
 
+def command_line(argv):
+    """Optional terminal flags; Spyder's Run file passes none, so the settings above are used."""
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--root", default=raw_data_root)
+    p.add_argument("--config", type=Path, default=config_file)
+    p.add_argument("--rows", default=None, help="comma separated row indices, e.g. 0,1,4")
+    p.add_argument("--diagnostics", default=None, help="comma separated row indices")
+    p.add_argument("--save", type=Path, default=HERE / "output" if save_results else None, metavar="DIR")
+    p.add_argument("--no-show", dest="show", action="store_false", default=show_figures)
+    return p.parse_args(argv)
 
+
+def _int_list(text, default):
+    return [int(x) for x in text.split(",")] if text else default
+
+
+if __name__ == "__main__":
+    args = command_line(sys.argv[1:])
+    rows = _int_list(args.rows, rows_to_run)
+    diagnostics_for = _int_list(args.diagnostics, diagnostic_rows)
+
+    if args.root is None:
+        from thtdecay.synthetic import write_mock_tht_experiment
+
+        root = HERE / "data" / "simulated"
+        _, config_path, _ = write_mock_tht_experiment(root)
+        print(f"No raw_data_root given: running on a simulated experiment ({root})")
+        diagnostics_for = diagnostics_for or [0]
+    else:
+        root, config_path = Path(args.root), args.config
+
+    config = read_config(config_path, required=("folder", "filename", "Well", "Control F", "Control T"))
+    results, summary = analyse_config(config, root, settings, rows)
+
+    figures = {}
+    for k in diagnostics_for:
+        norm, kin = results[k]
+        well = summary.loc[summary["row"] == k, "well"].iloc[0]
+        figures[f"diagnostics_row{k}_{well}"] = plot_diagnostics(norm["Time [s]"], norm[well], kin,
+                                                                 title=f"Run {k} ({well})")
+    save_and_show(figures, {"tht_summary": summary}, args.save, args.show)

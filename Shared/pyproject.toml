@@ -1,0 +1,15 @@
+[project]
+name = "fluostar"
+version = "0.1.0"
+description = "Shared helpers for BMG FLUOstar plate-reader data (loading, windows, config spreadsheets, well selection)"
+requires-python = ">=3.10"
+dependencies = ["numpy", "scipy", "pandas", "matplotlib", "openpyxl"]
+
+[project.optional-dependencies]
+notebook = ["ipywidgets", "ipympl"]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+addopts = "-v"

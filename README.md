@@ -7,28 +7,33 @@ As a hobby project, I aim to make many of the analysis scripts I have written fo
 
 Each module contains its own dedicated README with additional documentation and usage examples.
 
-- `ATPase_rate`  
-  Calculate ATPase activity rates from FLUOstar absorbance measurements.
+* `ATPase\_rate`  
+Calculate ATPase activity rates from FLUOstar absorbance measurements.
+* `Chromatogram\_fitter`  
+Fit user-defined distributions to chromatogram traces from ÄKTA and NGC systems. *(Intentionally limited public version: related work is covered by a patent application.)*
+* `EPR\_fitting`  
+Simulate EPR spectra from spin systems. *(Code currently only available upon request.)*
+* `FLT\_toolbox`  
+Global fluorescence lifetime fitting and steady-state anisotropy for FluoTime data. *(Archived.)*
+* `Gel\_quantification`  
+Quantification of band intensities from Western blots and gel electrophoresis images.
+* `Imaging`  
+Image analysis and segmentation of fibril structures from electron microscopy (EM) images.
+* `ThT\_decay`  
+Processing and analysis of high-throughput Thioflavin T fluorescence measurements from FLUOstar plate readers.
 
-- `Chromatogram_fitter`  
-  Fit user-defined distributions to chromatogram traces from ÄKTA and NGC systems.
+`ATPase\_rate` and `ThT\_decay` share the FLUOstar helpers in `Shared/` (loading exports, time windows, config spreadsheets, well selection); their run scripts find them automatically.
 
-- `EPR_fitting`  
-  Simulate EPR spectra from spin systems. *(Code currently only available upon request.)*
+## Running and testing
 
-- `FLT_toolbox`  
-  Global fluorescence lifetime fitting and steady-state anisotropy for FluoTime data. *(Archived.)*
-
-- `Gel_quantification`  
-  Quantification of band intensities from Western blots and gel electrophoresis images.
-
-- `Imaging`  
-  Image analysis and segmentation of fibril structures from electron microscopy (EM) images.
-
-- `ThT_decay`  
-  Processing and analysis of high-throughput Thioflavin T fluorescence measurements from FLUOstar plate readers.
+Most modules have run scripts with a **USER SETTINGS** block at the top: fill it in and run the file
+(e.g. Spyder: *Run file*). The same scripts also run from a terminal, where flags override the settings.
+`ATPase\_rate`, `ThT\_decay`, `FLT\_toolbox` and `Gel\_quantification` run on simulated data when no data is given, so they can be tried out first.
+Modules with a `tests/` folder are tested with `pytest` (run it inside the module folder); tests on real
+data are skipped unless you put your own files in that module's `tests/data/real/`, which is git-ignored.
 
 ## Status
 
 This repository is a work in progress. Modules are being actively migrated, cleaned up, documented, and generalized for broader use.
 Contributions, suggestions, and feedback are always welcome.
+

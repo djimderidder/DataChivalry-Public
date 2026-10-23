@@ -1,32 +1,79 @@
 # ATPase_rate
-Analyse ATP hydrolysis by HSPA8 using an enzyme-coupled ATPase assay in which ATP consumption is stoichiometrically linked to NADH oxidation.
 
-## atpaseVisualize.py
-`atpaseVisualize.py` main code to read ATPase data from config and display ATPase rates once config is set up.
-## atpasePicker.py: 
-`atpasePicker.py` identifies fitting windows (`Starti` and `Endi`) for the ATPase rate calculations. Since after NADH is depleted you will not measure ATPase rate anymore. The script loads raw FLUOstar traces, proposes an initial fitting region automatically, and allows the user to manually adjust the fitting window when needed.
- 
-### Setup
-Before running the script, update the **User Settings** section:
- 
-- `raw_data_root`: Path to the directory containing the raw FLUOstar export files.
-- `input_path`: Path to the folder containing the config spreadsheet.
-- `config_file`: Name of the config spreadsheet.
-- `rows_to_run`: List of row indices to process. Set to `None` to process all rows that do not yet have a `Starti` or `Endi` value.
- 
-### Workflow
-For each selected row:
- 
-1. The raw trace is loaded and background-subtracted using the specified control well.
-2. An initial fitting window is proposed automatically.
-3. The trace, fit, and calculated rate are displayed in a plot.
-4. If the automatically selected window is acceptable, the displayed values can be used directly.
-5. If the fit is not satisfactory (type 'n'), an interactive window opens where the start (light blue) and end (dark blue) boundaries can be dragged to a more suitable position.
-6. After clicking **Finish**, the trace is refitted using the manually selected window and the updated rate is displayed for 3 second after which the next plot will show.
- 
-### Notes
-- The script is intended as a fitting aid and does not automatically determine the optimal fitting region in all cases.
-- Always visually inspect the proposed fit before accepting it.
-- The script currently **does not automatically update the configuration spreadsheet**. Selected `Starti` and `Endi` values must be copied manually into the config file.
-- An interactive Matplotlib backend (e.g. `Qt5Agg`) is required for the manual picker to function correctly.
-- Running the script from Spyder is recommended with the graphics backend set to **Qt5** rather than **Inline**.
+ATP hydrolysis rates from an enzyme-coupled ATPase assay on a FLUOstar plate reader:
+every ATP hydrolysed oxidises one NADH, so the rate follows from the decrease of the NADH
+absorbance at 340 nm:
+
+```
+rate = − (dA₃₄₀/dt) / (ε · l · [E])        ATP per enzyme per minute
+```
+
+The slope is in absorbance per minute, ε = 6220 M⁻¹cm⁻¹ (NADH), l the path length
+(1 cm: FLUOstar exports are path-length corrected) and [E] the ATPase concentration.
+
+## Run
+
+1. Install the requirements: `pip install numpy scipy pandas matplotlib openpyxl palettable`.
+2. Fill in a config spreadsheet (see `input/ATPase config template.xlsx`), then run one of:
+   * **`atpaseVisualize.py`**: every row's trace with its fit, plus a bar plot of the rates.
+   * **`atpasePicker.py`**: find or check the fitting windows. For each row it shows the
+     automatic window and asks `y/n`. With `n`, a window opens where you drag start (light
+     blue) and end (dark blue) and click *Finish*. With `write_back = True` the chosen
+     Starti/Endi/Rate go to a **copy** of the config in `output/`; the original is never
+     overwritten.
+3. Set `raw_data_root` and `config_file` in the USER SETTINGS and run the file (Spyder:
+   *Run file*, F5). Leave `raw_data_root = None` to run on a simulated experiment first.
+   Afterwards `summary`, `traces` (visualize) or `picks` (picker) are in the Variable Explorer.
+
+Dragging needs an interactive matplotlib backend. In Spyder that is *Preferences →
+IPython console → Graphics → Backend: Qt5*; the *Inline* backend can't drag.
+
+From a terminal the same settings are used; flags override them without editing the file:
+
+```bash
+python atpaseVisualize.py --root D:/fluostar --config input/my_config.xlsx --rows 5,6 --save output --no-show
+python atpasePicker.py --root D:/fluostar --config input/my_config.xlsx --rows 13,3 --write-back
+python atpasePicker.py --accept-all --write-back      # no questions: keep every automatic window
+```
+
+### Config spreadsheet
+
+| column | meaning |
+|---|---|
+| `folder`, `filename` | raw export, relative to `raw_data_root` (Windows `\` also works on macOS/Linux) |
+| `Well`, `Control` | sample well, and the control well subtracted from it (`-` = none) |
+| `Starti`, `Endi` | fitting window as point indices, `signal[Starti:Endi]`; `-` = automatic |
+| `A` | ATPase concentration in µM (`AtpaseSettings(enzyme_column=...)`; old spreadsheets: `H`) |
+| `exp`, `date`, `X`, `M`, `B`, `C`, ... | description: `X` fibrils, `M` monomers, others (µM); shown under the rate bars via `label_columns` |
+| `Rate` | written by the picker (`write_back`) |
+
+### Fitting window
+
+* **Automatic start:** the first point.
+* **Automatic end:** the first point (after the start) where the signal reaches 95 % of
+  the mean of the last 5 points, i.e. where the NADH is used up. Set this with
+  `auto_threshold` and `auto_n_last`.
+* **From the config:** each bound is used when it's filled in, and each bound is chosen
+  separately. `Starti = 150, Endi = '-'` fits from point 150 to the automatic end.
+
+The old `atpaseVisualize.py` switched *both* bounds to automatic when either was
+missing, so a filled-in `Starti` was ignored whenever `Endi` was empty.
+
+## Tests
+
+`pip install pytest`, then `pytest`. The tests use simulated plates: NADH absorbance
+falls linearly at a known rate until it's used up, with a slightly drifting control well,
+noise, and one well with a slow start that its config `Starti` skips.
+
+They check that the code recovers the simulated rates and reproduces the formulas of the
+old scripts. They also run both run scripts, including the `y`/`n` branch of the picker.
+Tests on measured data run only when `tests/data/real/` (git-ignored) holds a raw export
+plus a `config.xlsx` with your previously found `Rate`; run only those with
+`pytest -m real_data`.
+
+## Limits
+
+* The rate is a linear fit over the chosen window. There is no correction for a lag
+  phase other than skipping it with `Starti`.
+* The automatic end assumes the trace ends flat (NADH used up). Without depletion it
+  stops near the end of the trace; check those runs with the picker.
